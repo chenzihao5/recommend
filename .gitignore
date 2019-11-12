@@ -1,0 +1,5 @@
+venv
+resource
+test
+.idea
+*.iml
