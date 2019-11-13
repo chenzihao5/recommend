@@ -2,6 +2,7 @@
 @author: chenzihao
 @time: 2019/11/11 下午3:42
 """
+import math
 import os
 import sys
 from collections import defaultdict
@@ -15,6 +16,8 @@ class ItemCF(object):
     train_set = {}
     co_occur_matrix = {}
     movie_like_num = {}
+
+    movie_popular_set = {}
 
     sim_movie_num = 20
     recommend_movie_num = 10
@@ -31,7 +34,7 @@ class ItemCF(object):
                 continue
             yield line.strip('\r\n')
             if i % 100000 == 0:
-                print("loading %s(%s)" % (file_name, i), file=sys.stderr)
+                print("loading %s(%s)" % (file_name, i))
         file_open.close()
         print("load %s successfully" % file_name, file=sys.stderr)
 
@@ -51,14 +54,20 @@ class ItemCF(object):
                 self.train_set[user_id][movie_id] = rating
                 train_size += 1
         print("split train set and test set successfully", file=sys.stderr)
-        print("train set size is %s" % train_size, file=sys.stderr)
-        print("test set size is %s" % test_size, file=sys.stderr)
+        print("train set size is %s" % train_size)
+        print("test set size is %s" % test_size)
 
     def movie_sim(self):
         """calculate movie similarity"""
         # build co_occur_matrix
         for user_id, movies in self.train_set.items():
+            print("reading the train data of the user: %s" % user_id)
             for movie_id in movies.keys():
+                # calculate movie popularity
+                if movie_id not in self.movie_popular_set:
+                    self.movie_popular_set[movie_id] = 0
+                else:
+                    self.movie_popular_set[movie_id] += 1
                 # calculate the total number of user who like each movie
                 self.movie_like_num[movie_id] = self.movie_like_num.setdefault(movie_id, 0) + 1
                 # co_occur_matrix
@@ -68,9 +77,10 @@ class ItemCF(object):
                         continue
                     else:
                         self.co_occur_matrix[movie_id][movie_id_1] += 1
-        print("build co_occur_matrix successfully")
+        print("build co_occur_matrix successfully", file=sys.stderr)
         # calculate similarity
         for movie_id, movies in self.co_occur_matrix.items():
+            print("calculating similarity of the movie: %s" % movie_id)
             for movie_id_1, count in movies.items():
                 self.co_occur_matrix[movie_id][movie_id_1] \
                     = count / (self.movie_like_num[movie_id] * self.movie_like_num[movie_id_1]) ** 0.5
@@ -93,18 +103,32 @@ class ItemCF(object):
     def evaluate(self):
         """print evaluate result: recall, precision, coverage, popularity"""
         hit = 0
-        recall_all = 0
-        precision_all = 0
+        recall_all = 0  # sum of recall movies, for recall
+        recommend_all = 0  # sum of recommended movies, for precision
+        popularity_all = 0
+        recommend_set = set()  # all recommend set, for coverage
         for user in self.train_set.keys():
             test_movies = self.test_set.get(user, {})
             recommend_res = self.recommend(user)
+            print("get recommended result of user: %s successfully" % user, file=sys.stderr)
             for movie, score in recommend_res:
+                popularity_all += math.log(1 + self.movie_popular_set[movie])
+                recommend_set.add(movie)
+                recommend_all += 1
                 if movie in test_movies:
                     hit += 1
-                recall_all += len(test_movies)
+            recall_all += len(test_movies)
         # recall
         recall = hit / (1.0 * recall_all)
-        print("recall: %.4f" % recall, file=sys.stderr)
+        # precision
+        precision = hit / (1.0 * recommend_all)
+        # coverage
+        coverage = len(recommend_set) / (1.0 * len(self.movie_popular_set))
+        # popularity
+        popularity = popularity_all / (1.0 * recommend_all)
+
+        print("recall: %.5f\nprecision: %.5f\ncoverage: %.5f\npopularity: %.5f"
+              % (recall, precision, coverage, popularity), file=sys.stderr)
 
 
 if __name__ == '__main__':
@@ -116,10 +140,4 @@ if __name__ == '__main__':
     # 每次实验选取不同的k(0≤k≤M-1)和相同的随机数种子seed，进行M次实验就可以得到M个不同的训练集和测试集，分别进行实验取平均值
     item_cf.split_data(rating_file, my_M, my_k, my_seed)
     item_cf.movie_sim()
-    res = item_cf.co_occur_matrix
-    count_num = 0
-    for movie_id, movies in res.items():
-        for movie_id_1, sim in movies:
-            count_num += 1
-            if count_num < 50:
-                print(movie_id, movie_id_1, sim)
+    item_cf.evaluate()
