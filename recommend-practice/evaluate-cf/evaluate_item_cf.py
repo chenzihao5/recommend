@@ -47,11 +47,11 @@ class ItemCF(object):
             user_id, movie_id, rating, timestamp = line.split(',')
             if random.randint(0, M) == k:
                 self.test_set.setdefault(user_id, {})
-                self.test_set[user_id][movie_id] = rating
+                self.test_set[user_id][movie_id] = float(rating)
                 test_size += 1
             else:
                 self.train_set.setdefault(user_id, {})
-                self.train_set[user_id][movie_id] = rating
+                self.train_set[user_id][movie_id] = float(rating)
                 train_size += 1
         print("split train set and test set successfully", file=sys.stderr)
         print("train set size is %s" % train_size)
@@ -69,7 +69,8 @@ class ItemCF(object):
                 else:
                     self.movie_popular_set[movie_id] += 1
                 # calculate the total number of user who like each movie
-                self.movie_like_num[movie_id] = self.movie_like_num.setdefault(movie_id, 0) + 1
+                self.movie_like_num.setdefault(movie_id, 0)
+                self.movie_like_num[movie_id] += 1
                 # co_occur_matrix
                 self.co_occur_matrix.setdefault(movie_id, defaultdict(int))
                 for movie_id_1 in movies.keys():
@@ -91,14 +92,15 @@ class ItemCF(object):
         """recommend N movies, top-K similar of movie"""
         rank_res = {}
         movies = self.train_set[user_id]
-        for movie, rating in movies:
+        for movie, rating in movies.items():
             for related_movie, similarity in sorted(
                     self.co_occur_matrix[movie].items(), key=itemgetter(1), reverse=True)[:self.sim_movie_num]:
                 if related_movie in movies:
                     continue
                 else:
-                    rank_res[related_movie] += rank_res.setdefault(related_movie, 0) + similarity * rating
-        return sorted(rank_res, key=itemgetter(1), reverse=True)[:self.recommend_movie_num]
+                    rank_res.setdefault(related_movie, 0)
+                    rank_res[related_movie] += similarity * rating
+        return sorted(rank_res.items(), key=itemgetter(1), reverse=True)[:self.recommend_movie_num]
 
     def evaluate(self):
         """print evaluate result: recall, precision, coverage, popularity"""
@@ -136,7 +138,7 @@ if __name__ == '__main__':
     item_cf = ItemCF()
     my_M = 8
     my_k = 0
-    my_seed = 10
+    my_seed = 0
     # 每次实验选取不同的k(0≤k≤M-1)和相同的随机数种子seed，进行M次实验就可以得到M个不同的训练集和测试集，分别进行实验取平均值
     item_cf.split_data(rating_file, my_M, my_k, my_seed)
     item_cf.movie_sim()
