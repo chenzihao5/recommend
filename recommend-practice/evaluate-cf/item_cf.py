@@ -8,6 +8,7 @@ import sys
 from collections import defaultdict
 import random
 from operator import itemgetter
+from common_util import Common
 
 
 class ItemCF(object):
@@ -22,40 +23,9 @@ class ItemCF(object):
     sim_movie_num = 20
     recommend_movie_num = 10
 
-    @staticmethod
-    def load_file(file_name):
-        """
-            load file
-            return generator
-        """
-        file_open = open(file_name, 'r')
-        for i, line in enumerate(file_open):
-            if i == 0:
-                continue
-            yield line.strip('\r\n')
-            if i % 100000 == 0:
-                print("loading %s(%s)" % (file_name, i))
-        file_open.close()
-        print("load %s successfully" % file_name, file=sys.stderr)
-
     def split_data(self, file_name, M, k, seed):
         """split data into test set and train set"""
-        train_size = 0
-        test_size = 0
-        random.seed(seed)
-        for line in self.load_file(file_name):
-            user_id, movie_id, rating, timestamp = line.split(',')
-            if random.randint(0, M) == k:
-                self.test_set.setdefault(user_id, {})
-                self.test_set[user_id][movie_id] = float(rating)
-                test_size += 1
-            else:
-                self.train_set.setdefault(user_id, {})
-                self.train_set[user_id][movie_id] = float(rating)
-                train_size += 1
-        print("split train set and test set successfully", file=sys.stderr)
-        print("train set size is %s" % train_size)
-        print("test set size is %s" % test_size)
+        Common().split_data(file_name, M, k, seed, self.train_set, self.test_set)
 
     def movie_sim(self):
         """calculate movie similarity"""
@@ -134,7 +104,7 @@ class ItemCF(object):
 
 
 if __name__ == '__main__':
-    rating_file = os.path.join('..', '..', 'resource', 'ml-20m', 'ratings.csv')
+    rating_file = os.path.join('..', 'resource', 'ml-latest-small', 'ratings.csv')
     item_cf = ItemCF()
     my_M = 8
     my_k = 0
